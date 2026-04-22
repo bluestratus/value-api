@@ -44,7 +44,7 @@ CREATE TABLE `datasource` (
   `price_trade_poor` int(11) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `mmym` (`make`,`model`,`year`,`miles`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 
 LOCK TABLES `datasource` WRITE;
 /*!40000 ALTER TABLE `datasource` DISABLE KEYS */;

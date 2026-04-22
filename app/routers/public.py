@@ -12,6 +12,10 @@ router = APIRouter()
 async def health():
     return {"status": "ok"}
 
+@router.post("/canprice")
+async def canprice_endpoint(make: str, model: str, year: int, debug: bool = False):
+    return await canprice(make, model, year, debug)
+
 @router.post("/value")
 async def value_endpoint(request: ValueRequest):
     if request.apikey != MY_API_KEY:
