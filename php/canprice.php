@@ -23,6 +23,20 @@ function getDatabaseConnection() {
     }
 }
 
+function makeExists($pdo, $make) {
+    $stmt = $pdo->prepare("SELECT 1 FROM datasource WHERE make = ? LIMIT 1");
+    $stmt->execute(array($make));
+    return $stmt->fetch() !== false;
+}
+
+function getModels($pdo, $make, $year) {
+    $stmt = $pdo->prepare(
+        "SELECT DISTINCT model FROM datasource WHERE make = ? AND year = ? ORDER BY model ASC"
+    );
+    $stmt->execute(array($make, $year));
+    return $stmt->fetchAll(PDO::FETCH_COLUMN);
+}
+
 function runQuery($pdo, $make, $year, $modelPrefix, $debug = false) {
     $sql = "
         SELECT *
@@ -136,7 +150,15 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $input = json_decode(file_get_contents('php://input'), true) ?: array();
+$pdo   = getDatabaseConnection();
 
+if (!$pdo) {
+    http_response_code(503);
+    echo json_encode(array("status" => "error", "message" => "Database unavailable, please try again shortly."));
+    exit;
+}
+
+// Step 1: need make
 if (!isset($input['make']) || trim($input['make']) === '') {
     echo json_encode(array(
         "status"  => "incomplete",
@@ -146,25 +168,63 @@ if (!isset($input['make']) || trim($input['make']) === '') {
     exit;
 }
 
+$make = trim($input['make']);
+
+if (!makeExists($pdo, $make)) {
+    echo json_encode(array(
+        "status"  => "invalid",
+        "field"   => "make",
+        "message" => "\"$make\" was not found in our database. Please check the make and try again."
+    ));
+    exit;
+}
+
+// Step 2: need year
 if (!isset($input['year']) || trim($input['year']) === '') {
     echo json_encode(array(
         "status"  => "incomplete",
         "field"   => "year",
-        "message" => "Got it — " . $input['make'] . ". What year was the vehicle registered?"
+        "message" => "Got it — $make. What year was the vehicle registered?"
     ));
     exit;
 }
 
+$year   = intval($input['year']);
+$models = getModels($pdo, $make, $year);
+
+if (empty($models)) {
+    echo json_encode(array(
+        "status"  => "invalid",
+        "field"   => "year",
+        "message" => "No vehicles found for $make in $year. Please check the year and try again."
+    ));
+    exit;
+}
+
+// Step 3: need model — return the list so the client can present options
 if (!isset($input['model']) || trim($input['model']) === '') {
     echo json_encode(array(
         "status"  => "incomplete",
         "field"   => "model",
-        "message" => "Almost there! What is the model? (e.g. Focus, 3 Series, Corolla)"
+        "message" => "Which model? Please choose from the list.",
+        "models"  => $models
     ));
     exit;
 }
 
-$debug = isset($input['debug']) ? $input['debug'] : false;
-$result = canprice($input['make'], $input['model'], intval($input['year']), $debug);
+$model = trim($input['model']);
+
+if (!in_array($model, $models)) {
+    echo json_encode(array(
+        "status"  => "invalid",
+        "field"   => "model",
+        "message" => "\"$model\" was not found. Please choose from the list.",
+        "models"  => $models
+    ));
+    exit;
+}
+
+$debug  = isset($input['debug']) ? $input['debug'] : false;
+$result = canprice($make, $model, $year, $debug);
 echo json_encode($result);
 ?>
