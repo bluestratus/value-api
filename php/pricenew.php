@@ -23,10 +23,24 @@ function getDatabaseConnection() {
     }
 }
 
+function getMakes($pdo) {
+    $stmt = $pdo->prepare("SELECT DISTINCT make FROM datasource ORDER BY make ASC");
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_COLUMN);
+}
+
 function makeExists($pdo, $make) {
     $stmt = $pdo->prepare("SELECT 1 FROM datasource WHERE make = ? LIMIT 1");
     $stmt->execute(array($make));
     return $stmt->fetch() !== false;
+}
+
+function getYears($pdo, $make) {
+    $stmt = $pdo->prepare(
+        "SELECT DISTINCT year FROM datasource WHERE make = ? ORDER BY year DESC"
+    );
+    $stmt->execute(array($make));
+    return $stmt->fetchAll(PDO::FETCH_COLUMN);
 }
 
 function getModels($pdo, $make, $year) {
@@ -63,10 +77,10 @@ function runQuery($pdo, $make, $year, $modelPrefix, $debug = false) {
     }
 }
 
-function canprice($make, $model, $year, $debug = false) {
+function pricenew($make, $model, $year, $debug = false) {
     $pdo = getDatabaseConnection();
     if (!$pdo) {
-        return array("result" => "false", "price_new" => 0, "error" => "database_connection_failed");
+        return array("status" => "error", "make" => $make, "model" => $model, "year" => $year, "price_new" => 0);
     }
 
     try {
@@ -77,7 +91,7 @@ function canprice($make, $model, $year, $debug = false) {
         // 1. Exact year, full model prefix
         $row = runQuery($pdo, $make, $year, $model, $debug);
         if ($row) {
-            return array("result" => "true", "price_new" => intval($row["price_new"]));
+            return array("status" => "success", "make" => $make, "model" => $model, "year" => $year, "price_new" => intval($row["price_new"]));
         }
 
         // 2. First 4 parts, same year / last year / next year
@@ -86,17 +100,17 @@ function canprice($make, $model, $year, $debug = false) {
 
             $row = runQuery($pdo, $make, $year, $prefix4, $debug);
             if ($row) {
-                return array("result" => "true", "price_new" => intval($row["price_new"]));
+                return array("status" => "success", "make" => $make, "model" => $model, "year" => $year, "price_new" => intval($row["price_new"]));
             }
 
             $row = runQuery($pdo, $make, $lastYear, $prefix4, $debug);
             if ($row) {
-                return array("result" => "true", "price_new" => intval($row["price_new"]));
+                return array("status" => "success", "make" => $make, "model" => $model, "year" => $year, "price_new" => intval($row["price_new"]));
             }
 
             $row = runQuery($pdo, $make, $nextYear, $prefix4, $debug);
             if ($row) {
-                return array("result" => "true", "price_new" => intval($row["price_new"]));
+                return array("status" => "success", "make" => $make, "model" => $model, "year" => $year, "price_new" => intval($row["price_new"]));
             }
         }
 
@@ -106,17 +120,17 @@ function canprice($make, $model, $year, $debug = false) {
 
             $row = runQuery($pdo, $make, $year, $prefix3, $debug);
             if ($row) {
-                return array("result" => "true", "price_new" => intval($row["price_new"]));
+                return array("status" => "success", "make" => $make, "model" => $model, "year" => $year, "price_new" => intval($row["price_new"]));
             }
 
             $row = runQuery($pdo, $make, $lastYear, $prefix3, $debug);
             if ($row) {
-                return array("result" => "true", "price_new" => intval($row["price_new"]));
+                return array("status" => "success", "make" => $make, "model" => $model, "year" => $year, "price_new" => intval($row["price_new"]));
             }
 
             $row = runQuery($pdo, $make, $nextYear, $prefix3, $debug);
             if ($row) {
-                return array("result" => "true", "price_new" => intval($row["price_new"]));
+                return array("status" => "success", "make" => $make, "model" => $model, "year" => $year, "price_new" => intval($row["price_new"]));
             }
 
             // 4. First 2 parts, only if first part length > 2, same year only
@@ -125,16 +139,16 @@ function canprice($make, $model, $year, $debug = false) {
 
                 $row = runQuery($pdo, $make, $year, $prefix2, $debug);
                 if ($row) {
-                    return array("result" => "true", "price_new" => intval($row["price_new"]));
+                    return array("status" => "success", "make" => $make, "model" => $model, "year" => $year, "price_new" => intval($row["price_new"]));
                 }
             }
         }
 
-        return array("result" => "false", "price_new" => 0);
+        return array("status" => "failed", "make" => $make, "model" => $model, "year" => $year, "price_new" => 0);
 
     } catch (Exception $e) {
         error_log("CanPrice service error: " . $e->getMessage());
-        return array("result" => "false", "price_new" => 0, "error" => $e->getMessage());
+        return array("status" => "error", "make" => $make, "model" => $model, "year" => $year, "price_new" => 0);
     } finally {
         $pdo = null;
     }
@@ -162,7 +176,7 @@ if (!$pdo) {
 if (!isset($input['make']) || trim($input['make']) === '') {
     echo json_encode(array(
         "status"  => "incomplete",
-        "field"   => "make",
+        "parameter"   => "make",
         "message" => "What is the make of the vehicle? (e.g. Ford, BMW, Toyota)"
     ));
     exit;
@@ -172,9 +186,10 @@ $make = trim($input['make']);
 
 if (!makeExists($pdo, $make)) {
     echo json_encode(array(
-        "status"  => "invalid",
-        "field"   => "make",
-        "message" => "\"$make\" was not found in our database. Please check the make and try again."
+        "status"    => "invalid",
+        "parameter" => "make",
+        "message"   => "\"$make\" was not found in our database. Please choose from the list.",
+        "options"   => getMakes($pdo)
     ));
     exit;
 }
@@ -182,9 +197,10 @@ if (!makeExists($pdo, $make)) {
 // Step 2: need year
 if (!isset($input['year']) || trim($input['year']) === '') {
     echo json_encode(array(
-        "status"  => "incomplete",
-        "field"   => "year",
-        "message" => "Got it — $make. What year was the vehicle registered?"
+        "status"   => "incomplete",
+        "parameter"    => "year",
+        "message"  => "Got it — $make. What year was the vehicle registered?",
+        "options"  => getYears($pdo, $make)
     ));
     exit;
 }
@@ -194,20 +210,21 @@ $models = getModels($pdo, $make, $year);
 
 if (empty($models)) {
     echo json_encode(array(
-        "status"  => "invalid",
-        "field"   => "year",
-        "message" => "No vehicles found for $make in $year. Please check the year and try again."
+        "status"    => "invalid",
+        "parameter" => "year",
+        "message"   => "No vehicles found for $make in $year. Please choose from the list.",
+        "options"   => getYears($pdo, $make)
     ));
     exit;
 }
 
-// Step 3: need model — return the list so the client can present options
+// Step 3: need model
 if (!isset($input['model']) || trim($input['model']) === '') {
     echo json_encode(array(
         "status"  => "incomplete",
-        "field"   => "model",
+        "parameter"   => "model",
         "message" => "Which model? Please choose from the list.",
-        "models"  => $models
+        "options" => $models
     ));
     exit;
 }
@@ -217,14 +234,14 @@ $model = trim($input['model']);
 if (!in_array($model, $models)) {
     echo json_encode(array(
         "status"  => "invalid",
-        "field"   => "model",
+        "parameter"   => "model",
         "message" => "\"$model\" was not found. Please choose from the list.",
-        "models"  => $models
+        "options" => $models
     ));
     exit;
 }
 
 $debug  = isset($input['debug']) ? $input['debug'] : false;
-$result = canprice($make, $model, $year, $debug);
+$result = pricenew($make, $model, $year, $debug);
 echo json_encode($result);
 ?>

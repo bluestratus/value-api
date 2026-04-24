@@ -11,6 +11,9 @@ class VRMResult(BaseModel):
     year: int = 0
 
 class PriceResult(BaseModel):
-    result: str
-    value: int = 0
+    status: str  # "success", "failed", "error"
+    make: str = ""
+    model: str = ""
+    year: int = 0
+    price_new: int = 0
     source: str = ""

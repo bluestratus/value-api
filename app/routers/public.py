@@ -12,7 +12,7 @@ router = APIRouter()
 async def health():
     return {"status": "ok"}
 
-@router.post("/canprice")
+@router.post("/pricenew")
 async def canprice_endpoint(make: str, model: str, year: int, debug: bool = False):
     return await canprice(make, model, year, debug)
 
@@ -23,46 +23,15 @@ async def value_endpoint(request: ValueRequest):
 
     vrm = await lookup_vrm(request.numberplate)
     if vrm["result"] != "true":
-        return {
-            "result": "false",
-            "value": 0,
-            "source": "vrm_failed"
-        }
+        return {"status": "failed", "make": "", "model": "", "year": 0, "price_new": 0, "source": "vrm_failed"}
 
-    make = vrm["make"]
+    make  = vrm["make"]
     model = vrm["model"]
-    year = vrm["year"]
+    year  = vrm["year"]
 
-    result = await canprice(make, model, year)
-    if result["result"] == "true":
-        return {
-            "result": "true",
-            "value": result["value"],
-            "source": result["source"],
-            "vehicle": vrm
-        }
+    for service in [canprice, aivalue, paidvalue]:
+        result = await service(make, model, year)
+        if result["status"] == "success":
+            return result
 
-    result = await aivalue(make, model, year)
-    if result["result"] == "true":
-        return {
-            "result": "true",
-            "value": result["value"],
-            "source": result["source"],
-            "vehicle": vrm
-        }
-
-    result = await paidvalue(make, model, year)
-    if result["result"] == "true":
-        return {
-            "result": "true",
-            "value": result["value"],
-            "source": result["source"],
-            "vehicle": vrm
-        }
-
-    return {
-        "result": "false",
-        "value": 0,
-        "source": "all_failed",
-        "vehicle": vrm
-    }
+    return {"status": "failed", "make": make, "model": model, "year": year, "price_new": 0, "source": "all_failed"}

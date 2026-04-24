@@ -12,7 +12,7 @@ async def canprice(make: str, model: str, year: int, debug: bool = False) -> dic
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
-                f"{php_url}/canprice.php",
+                f"{php_url}/pricenew.php",
                 json={
                     "make": make,
                     "model": model,
@@ -24,21 +24,16 @@ async def canprice(make: str, model: str, year: int, debug: bool = False) -> dic
 
             if response.status_code == 200:
                 result = response.json()
-                if "result" in result and "price_new" in result:
-                    return {"result": result["result"], "value": int(result["price_new"]), "source": "canprice"}
+                if result.get("result") == "true" and "price_new" in result:
+                    return {"status": "success", "make": make, "model": model, "year": year, "price_new": int(result["price_new"]), "source": "canprice"}
                 else:
-                    return {"result": "false", "value": 0, "error": "invalid_response_format"}
+                    return {"status": "failed", "make": make, "model": model, "year": year, "price_new": 0, "source": "canprice"}
             else:
-                return {
-                    "result": "false",
-                    "value": 0,
-                    "error": f"http_{response.status_code}",
-                    "details": response.text[:200]
-                }
+                return {"status": "error", "make": make, "model": model, "year": year, "price_new": 0, "source": "canprice"}
 
     except httpx.TimeoutException:
-        return {"result": "false", "value": 0, "error": "timeout"}
-    except httpx.RequestError as e:
-        return {"result": "false", "value": 0, "error": "connection_failed", "details": str(e)}
-    except Exception as e:
-        return {"result": "false", "value": 0, "error": "unexpected_error", "details": str(e)}
+        return {"status": "error", "make": make, "model": model, "year": year, "price_new": 0, "source": "canprice"}
+    except httpx.RequestError:
+        return {"status": "error", "make": make, "model": model, "year": year, "price_new": 0, "source": "canprice"}
+    except Exception:
+        return {"status": "error", "make": make, "model": model, "year": year, "price_new": 0, "source": "canprice"}

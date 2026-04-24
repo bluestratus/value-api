@@ -16,13 +16,9 @@ async def paidvalue(make: str, model: str, year: int) -> dict:
             response.raise_for_status()
             data = response.json()
     except (httpx.HTTPStatusError, httpx.RequestError):
-        return {"result": "false", "value": 0, "source": "paidvalue"}
+        return {"status": "error", "make": make, "model": model, "year": year, "price_new": 0, "source": "paidvalue"}
 
     if data.get("result") == "true":
-        return {
-            "result": "true",
-            "value": int(data.get("value", 0) or 0),
-            "source": "paidvalue"
-        }
+        return {"status": "success", "make": make, "model": model, "year": year, "price_new": int(data.get("value", 0) or 0), "source": "paidvalue"}
 
-    return {"result": "false", "value": 0, "source": "paidvalue"}
+    return {"status": "failed", "make": make, "model": model, "year": year, "price_new": 0, "source": "paidvalue"}

@@ -12,8 +12,8 @@ switch ($uri) {
         echo "</ul>";
         break;
 
-    case 'canprice':
-        require 'canprice.php';
+    case 'pricenew':
+        require 'pricenew.php';
         break;
 
     default:
